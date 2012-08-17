@@ -1,4 +1,1 @@
-deploi
-======
-
-Configurable web deployment system
+deploi - the configurable web deployment system
