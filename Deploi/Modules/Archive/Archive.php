@@ -79,9 +79,20 @@
 				// ignore this error
 				if(strpos($e->getMessage(), "a phar with that name already exists") === false)
 					print_r($e);
+
+				throw $e;
 			}
 		}
 
+		/**
+		 * Get the archive destination filename
+		 *
+		 * @param $location
+		 * @param bool $timestamp
+		 * @param bool $overwrite
+		 * @return string
+		 * @throws \Exception
+		 */
 		private function getFilename($location, $timestamp = true, $overwrite = false)
 		{
 			$location = realpath($location);
