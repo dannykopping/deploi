@@ -78,6 +78,8 @@
 		public function setWebroot($webroot)
 		{
 			$this->webroot = $webroot;
+			if(substr($this->webroot, strlen($this->webroot) - 1) == "/")
+				$this->webroot = substr($this->webroot, 0, strlen($this->webroot) - 1);
 		}
 
 		public function getWebroot()

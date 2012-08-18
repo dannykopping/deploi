@@ -8,6 +8,8 @@
 	 *    Deploys a FileSet to a server via SSH & SFTP
 	 */
 	use Deploi\Modules\Base;
+	use Net_SFTP;
+	use Deploi\Modules\Archive\Archive;
 	use Deploi\Modules\FileDeploy\Exception\Exception;
 	use Net_SSH2;
 	use Deploi\Util\Security\Credentials;
@@ -31,6 +33,11 @@
 		 * @var Net_SSH2
 		 */
 		private $ssh;
+
+		/**
+		 * @var	Net_SFTP
+		 */
+		private $sftp;
 
 		/**
 		 *
@@ -62,6 +69,7 @@
 			$this->initConnections();
 			$this->connect();
 			$this->setupDirectoryStructure();
+			$this->createDeploymentPayload();
 
 			$this->disconnect();
 
@@ -81,6 +89,9 @@
 
 			$this->ssh = new Net_SSH2($host, empty($port) ? 22 : $port);
 			$this->ssh->setTimeout(15);
+
+			$this->sftp = new Net_SFTP($host, empty($port) ? 22 : $port);
+			$this->sftp->setTimeout(15);
 		}
 
 		/**
@@ -89,6 +100,11 @@
 		private function connect()
 		{
 			if(!$this->ssh->login($this->credentials->getUsername(), $this->credentials->getPassword()))
+			{
+				throw new Exception(sprintf(Exception::CONNECTION_FAILURE, $this->credentials->getHost()));
+			}
+
+			if(!$this->sftp->login($this->credentials->getUsername(), $this->credentials->getPassword()))
 			{
 				throw new Exception(sprintf(Exception::CONNECTION_FAILURE, $this->credentials->getHost()));
 			}
@@ -108,8 +124,33 @@
 			if(empty($webroot) || !$this->pathExists($webroot))
 				throw new Exception(sprintf(Exception::INVALID_WEBROOT, $webroot));
 
-			$home = trim($this->getHomeDir())."/deploi";
+			$home = trim($this->getHomeDir()) . "/deploi";
 			$this->createPaths(array($webroot, "$home/releases", "$home/shared"));
+		}
+
+		/**
+		 * Create an archive of all the files to be deployed
+		 */
+		private function createDeploymentPayload()
+		{
+			$payload = new Archive($this->fileSet);
+			$tempFile = $payload->save(sys_get_temp_dir().DIRECTORY_SEPARATOR."deploi");
+
+			$home = trim($this->getHomeDir());
+			$webroot = $this->credentials->getWebroot();
+			$releases = "$home/deploi/releases";
+			$filename = basename($tempFile);
+			$filenameNoExt = substr($filename, 0, strpos($filename, "."));
+
+			$this->sftp->chdir($releases);
+			$this->sftp->put($filename, $tempFile, NET_SFTP_LOCAL_FILE);
+
+			// remove trailing slash
+
+			$this->run("cd $releases");
+			$this->createPaths(array("$releases/$filenameNoExt"));
+			$this->run(sprintf("tar mvxf %s -C %s", "$releases/$filename", "$releases/$filenameNoExt"));
+			$this->run(sprintf("ln -snf %s %s", "$releases/$filenameNoExt", $webroot));
 		}
 
 		/**
@@ -131,8 +172,8 @@
 			catch(\Exception $e)
 			{
 				$this->ssh->disconnect();
-				throw new Exception(sprintf(Exception::COMMAND_FAILURE, $command, $e->getMessage())."\n".print_r($e, true),
-								$e->getCode(), $e, $e->getFile(), $e->getLine(), $e->getPrevious());
+				throw new Exception(sprintf(Exception::COMMAND_FAILURE, $command, $e->getMessage()) . "\n" . print_r($e, true),
+					$e->getCode(), $e, $e->getFile(), $e->getLine(), $e->getPrevious());
 			}
 
 			return $result;
@@ -207,5 +248,6 @@
 		private function disconnect()
 		{
 			$this->ssh->disconnect();
+			$this->sftp->disconnect();
 		}
 	}

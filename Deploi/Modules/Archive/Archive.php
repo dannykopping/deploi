@@ -57,9 +57,9 @@
 		 */
 		public function save($location, $timestamp = true, $overwrite = false)
 		{
-			$path = $this->getFilename($location, $timestamp, $overwrite);
+			$filepath = $this->getFilename($location, $timestamp, $overwrite);
 
-			$tar = new PharData($path);
+			$tar = new PharData($filepath);
 			$validPaths = $this->fileSet->getValidPaths();
 
 			if(!empty($validPaths) && count($validPaths) > 0)
@@ -78,10 +78,13 @@
 			{
 				// ignore this error
 				if(strpos($e->getMessage(), "a phar with that name already exists") === false)
+				{
 					print_r($e);
-
-				throw $e;
+					throw $e;
+				}
 			}
+
+			return realpath($filepath);
 		}
 
 		/**
@@ -95,7 +98,11 @@
 		 */
 		private function getFilename($location, $timestamp = true, $overwrite = false)
 		{
+			if(!realpath($location))
+				@mkdir($location, 0777, true);
+
 			$location = realpath($location);
+
 			if(empty($location))
 				throw new Exception("Base path invalid for archive");
 

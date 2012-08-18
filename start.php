@@ -15,17 +15,17 @@
     Config::setConfigPath("conf/");
 
     $set = new FileSet();
-    $set->setBasePath(__DIR__);
-    $set->setPaths(array(__DIR__));
-    $set->setExclusions(array("\/\.+", "\.conf", "archive(.+)?\.[zip|tar\.gz]"));
+    $set->setBasePath("to-deploy/");
+    $set->setPaths(array("to-deploy/"));
+    $set->setExclusions(array("\/\.+", "\.bad"));
 
 	$creds = new Credentials("192.168.2.100", "dev", "dev", 22, Credentials::SERVER);
 	$creds->setWebroot("/var/www");
 
-    // archive example
+//     archive example
 //    $z = new Archive($set);
 //
-//    $tmp = tempnam(sys_get_temp_dir(), "deploi/archive");
+//    $tmp = tempnam(sys_get_temp_dir(), "archive");
 //    $z->save($tmp);
 //
 //	echo $tmp;
