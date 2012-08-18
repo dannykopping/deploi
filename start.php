@@ -11,4 +11,5 @@
     Config::setConfigPath("conf/");
 
     // archive example
-    // $z = new Archive(__DIR__, array(__DIR__), array(), array("\/\.+", "\.conf"));
+    $z = new Archive(__DIR__, array(__DIR__), array("\/\.+", "\.conf", "archive(.+)?\.zip"));
+    $z->save(__DIR__);

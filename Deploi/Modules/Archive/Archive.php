@@ -17,6 +17,10 @@
      */
     class Archive extends Base
     {
+        public $basePath;
+        public $paths;
+        public $excludePattern;
+
         public function register()
         {
             $this->hooks = array(
@@ -34,20 +38,22 @@
          * @param null $excludePattern
          * @throws \Exception
          */
-        public function archive($basePath, $paths = array(), $excludePaths = array(), $excludePattern = null)
+        public function __construct($basePath, $paths = array(), $excludePattern = null)
         {
-            $basePath = realpath($basePath);
+            $this->basePath = realpath($this->basePath);
+            $this->paths = $paths;
+            $this->excludePattern = $excludePattern;
 
-            if(empty($basePath))
+            if(empty($this->basePath))
                 throw new Exception("Base path invalid for archive");
 
-            if(!empty($paths))
+            if(!empty($this->paths))
             {
-                $paths = $this->normalizePaths($basePath, $paths);
+                $this->paths = $this->normalizePaths($this->basePath, $this->paths);
 
                 // get recursive scan of all provided paths
                 $recursive = array();
-                foreach($paths as $path)
+                foreach($this->paths as $path)
                 {
                     $files = $this->recursiveFileFolderScan($path);
                     if(!empty($files))
@@ -58,32 +64,43 @@
                 }
 
                 if(!empty($recursive))
-                    $paths = array_unique($recursive);
+                    $this->paths = array_unique($recursive);
             }
+        }
 
-            if(!empty($excludePaths))
-                $excludePaths = $this->normalizePaths($basePath, $excludePaths);
+        public function save($location, $timestamp=true, $overwrite=false)
+        {
+            $location = realpath($location);
+            if(empty($location))
+                throw new Exception("Base path invalid for archive");
+
+            $filename = "archive.zip";
+            if($overwrite)
+                $filename = "archive.zip";
+            else if($timestamp)
+                $filename = "archive".date("U").".zip";
+
+            $path = is_file($location)
+                    ? dirname($location).DIRECTORY_SEPARATOR.$filename
+                    : $location.DIRECTORY_SEPARATOR.$filename;
 
             $zip = new ZipArchive();
-            $zip->open(__DIR__."/test.zip", ZIPARCHIVE::OVERWRITE);
+            $zip->open($path, $overwrite ? ZIPARCHIVE::OVERWRITE : ZIPARCHIVE::CREATE);
 
-            $paths = array_unique($paths);
+            $paths = array_unique($this->paths);
             foreach($paths as $path)
             {
-                if(!$this->isExcluded($path, $excludePaths, $excludePattern))
+                if(!$this->isExcluded($path, $this->excludePattern))
                 {
                     if(is_dir($path))
                         continue;
 
-                    echo $path."\n";
-
-                    $localPath = strpos($path, $basePath) === 0
-                                ?   substr($path, strlen($basePath))
-                                :   null;
+                    $localPath = strpos($path, $this->basePath) === 0
+                        ? substr($path, strlen($this->basePath))
+                        : null;
 
                     $zip->addFile($path, $localPath);
                 }
-                else echo "Ex: $path\n";
             }
 
             $zip->close();
@@ -142,30 +159,10 @@
          * @param null $exclusionPatterns
          * @return bool
          */
-        private function isExcluded($path, $exclusions = array(), $exclusionPatterns = null)
+        private function isExcluded($path, $exclusionPatterns = null)
         {
-            if(empty($exclusions) && empty($exclusionPatterns))
+            if(empty($exclusionPatterns))
                 return false;
-
-            if(!empty($exclusions))
-            {
-                // fix single arguments as strings
-                if(is_string($exclusions))
-                    $exclusions = array($exclusions);
-
-                foreach($exclusions as $exPath)
-                {
-                    $normalizedPath = trim(strtolower($path));
-                    $normalizedExPath = trim(strtolower($exPath));
-
-                    if($normalizedPath == $normalizedExPath)
-                        return true;
-
-                    // exclude path and all children
-                    if(strpos($normalizedPath, $normalizedExPath) === 0)
-                        return true;
-                }
-            }
 
             if(!empty($exclusionPatterns))
             {
