@@ -2,16 +2,17 @@
     namespace Deploi\Modules\Archive;
 
     use Deploi\Modules\Base;
+    use Phar;
+    use PharData;
     use SplFileInfo;
     use RecursiveDirectoryIterator;
     use RecursiveIteratorIterator;
     use Exception;
-    use ZipArchive;
 
     /**
      *  Archive Module
      *
-     *  Accepts an array of paths and exclusions to turn into a ZIP archive
+     *  Accepts an array of paths and exclusions to turn into an archive
      *
      * @author Danny Kopping
      */
@@ -23,9 +24,12 @@
 
         public function register()
         {
+            $this->name = "archive";
+            $this->description = "Creates an archive for a set of files";
+
             $this->hooks = array(
-                "pre.zip",
-                "post.zip"
+                "pre.archive",
+                "post.archive"
             );
         }
 
@@ -74,18 +78,17 @@
             if(empty($location))
                 throw new Exception("Base path invalid for archive");
 
-            $filename = "archive.zip";
+            $filename = "archive.tar.gz";
             if($overwrite)
-                $filename = "archive.zip";
+                $filename = "archive.tar.gz";
             else if($timestamp)
-                $filename = "archive".date("U").".zip";
+                $filename = "archive".date("U").".tar.gz";
 
             $path = is_file($location)
                     ? dirname($location).DIRECTORY_SEPARATOR.$filename
                     : $location.DIRECTORY_SEPARATOR.$filename;
 
-            $zip = new ZipArchive();
-            $zip->open($path, $overwrite ? ZIPARCHIVE::OVERWRITE : ZIPARCHIVE::CREATE);
+            $tar = new PharData($path);
 
             $paths = array_unique($this->paths);
             foreach($paths as $path)
@@ -99,11 +102,20 @@
                         ? substr($path, strlen($this->basePath))
                         : null;
 
-                    $zip->addFile($path, $localPath);
+                    $tar->addFile($path, $localPath);
                 }
             }
 
-            $zip->close();
+            try
+            {
+                $tar->convertToData(Phar::TAR, Phar::GZ);
+            }
+            catch(Exception $e)
+            {
+                // ignore this error
+                if(strpos($e->getMessage(), "a phar with that name already exists") === false)
+                    print_r($e);
+            }
         }
 
         /**
