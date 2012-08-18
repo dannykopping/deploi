@@ -12,10 +12,15 @@
 
         public $hooks;
 
+		public function __construct()
+		{
+			$this->register();
+		}
+
         /**
          * @override
          */
-        public function register()
+        protected function register()
         {
             // initialize all hooks
         }
