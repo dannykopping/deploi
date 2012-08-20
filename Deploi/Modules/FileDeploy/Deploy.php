@@ -8,6 +8,9 @@
 	 *    Deploys a FileSet to a server via SSH & SFTP
 	 */
 	use Deploi\Modules\Base;
+	use Deploi\Util\File\PathHelper;
+	use ErrorException;
+	use Deploi\Util\Config;
 	use Net_SFTP;
 	use Deploi\Modules\Archive\Archive;
 	use Deploi\Modules\FileDeploy\Exception\Exception;
@@ -35,7 +38,7 @@
 		private $ssh;
 
 		/**
-		 * @var	Net_SFTP
+		 * @var    Net_SFTP
 		 */
 		private $sftp;
 
@@ -54,7 +57,7 @@
 		}
 
 		/**
-		 * @param \Deploi\Util\File\FileSet $fileSet
+		 * @param \Deploi\Util\File\FileSet         $fileSet
 		 * @param \Deploi\Util\Security\Credentials $credentials
 		 */
 		public function __construct(FileSet $fileSet, Credentials $credentials)
@@ -69,7 +72,7 @@
 			$this->initConnections();
 			$this->connect();
 			$this->setupDirectoryStructure();
-			$this->createDeploymentPayload();
+			$this->deployPayload();
 
 			$this->disconnect();
 
@@ -131,32 +134,74 @@
 		/**
 		 * Create an archive of all the files to be deployed
 		 */
-		private function createDeploymentPayload()
+		private function deployPayload()
 		{
 			$payload = new Archive($this->fileSet);
-			$tempFile = $payload->save(sys_get_temp_dir().DIRECTORY_SEPARATOR."deploi");
+			$tempFile = $payload->save(sys_get_temp_dir() . DIRECTORY_SEPARATOR . "deploi");
 
 			$home = trim($this->getHomeDir());
 			$webroot = $this->credentials->getWebroot();
-			$releases = "$home/deploi/releases";
 			$filename = basename($tempFile);
 			$filenameNoExt = substr($filename, 0, strpos($filename, "."));
 
-			$this->sftp->chdir($releases);
-			$this->sftp->put($filename, $tempFile, NET_SFTP_LOCAL_FILE);
+			$releases = "$home/deploi/releases";
+			$currentTimestamp = date("U");
 
-			// remove trailing slash
+			if(Config::get("filedeploy.useSymlinks"))
+			{
+				$this->sftp->chdir($releases);
+				$this->sftp->put($filename, $tempFile, NET_SFTP_LOCAL_FILE);
 
-			$this->run("cd $releases");
-			$this->createPaths(array("$releases/$filenameNoExt"));
-			$this->run(sprintf("tar mvxf %s -C %s", "$releases/$filename", "$releases/$filenameNoExt"));
-			$this->run(sprintf("ln -snf %s %s", "$releases/$filenameNoExt", $webroot));
+				// if the webroot already exists and is not a symbolic link, move it and recreate webroot
+				if($this->pathExists($webroot) && !$this->pathIs($webroot, PathHelper::IS_SYMBOLIC))
+					$this->run(sprintf("mv %s %s.$currentTimestamp", $webroot, $webroot));
+
+				$this->run("cd $releases");
+				$this->createPaths(array("$releases/$filenameNoExt"));
+				echo $this->run(sprintf("tar mvxf %s -C %s", "$releases/$filename", "$releases/$filenameNoExt"));
+				echo $this->run(sprintf("ln -snvf %s %s", "$releases/$filenameNoExt", $webroot));
+
+				echo $this->sftp->delete("$releases/$filename");
+			}
+			else
+			{
+				$backup = "$releases/backup-$currentTimestamp";
+				if(!$this->checkDirectoryPerms($releases, PathHelper::IS_WRITABLE))
+					throw new Exception(sprintf(Exception::PERMISSION_FAILURE, $releases, PathHelper::getText(PathHelper::IS_WRITABLE)));
+
+				if(Config::get("filedeploy.tarballBackups"))
+				{
+					$backup .= ".tar.gz";
+
+					echo $this->run(sprintf("tar cvzf %s %s", $backup, "$webroot"));
+
+					if(!$this->pathExists($backup, true))
+						throw new Exception(sprintf(Exception::FILE_CREATION_FAILURE, $backup, "Path $backup is invalid or " .
+							"backup file could not be written"));
+				}
+				else
+				{
+					$this->createPaths(array($backup));
+					echo $this->run(sprintf("cp --parents -R %s %s", $webroot, $backup));
+				}
+
+				// once backup is created, clear the webroot
+				echo $this->clearDirectory($webroot);
+
+				// upload new file
+				$this->sftp->chdir($webroot);
+				$this->sftp->put($filename, $tempFile, NET_SFTP_LOCAL_FILE);
+				echo $this->run(sprintf("tar mvxf %s -C %s --overwrite", "$webroot/$filename", "$webroot"));
+
+				echo $this->run("rm $webroot/$filename");
+			}
 		}
 
 		/**
 		 * Execute a command and catch any errors that ensue
 		 *
 		 * @param $command
+		 *
 		 * @return String
 		 * @throws Exception\Exception
 		 */
@@ -176,13 +221,14 @@
 					$e->getCode(), $e, $e->getFile(), $e->getLine(), $e->getPrevious());
 			}
 
-			return $result;
+			return trim($result);
 		}
 
 		/**
 		 * Creates paths that do not currently exist
 		 *
 		 * @param $paths
+		 *
 		 * @throws Exception\Exception
 		 */
 		private function createPaths($paths)
@@ -202,6 +248,37 @@
 		}
 
 		/**
+		 * @param $path
+		 * @param $command
+		 *
+		 * @return bool
+		 */
+		private function pathIs($path, $command)
+		{
+			return $this->run(sprintf("[ %s %s ] && echo 'true' || echo 'false'", $command, $path)) == "true";
+		}
+
+		/**
+		 * @param      $path
+		 * @param bool $recursive
+		 * @param bool $filesOnly
+		 *
+		 * @return String
+		 */
+		private function clearDirectory($path, $recursive = true, $filesOnly = false)
+		{
+			// if the directory does not exist, don't bother
+			if(!$this->pathExists($path))
+				return;
+
+			$options = "";
+			if($recursive) $options .= "r";
+			if(!$filesOnly) $options .= "f";
+
+			return $this->run(sprintf("rm -%s %s/*", $options, $path));
+		}
+
+		/**
 		 * Returns the home directory for the signed-in user
 		 *
 		 * @return String
@@ -214,31 +291,56 @@
 		/**
 		 * Determine whether a path exists
 		 *
-		 * @param $path
+		 * @param      $path
+		 * @param bool $file
+		 *
 		 * @return bool
 		 */
-		private function pathExists($path)
+		private function pathExists($path, $file = false)
 		{
-			return trim($this->run(sprintf("[ -d %s ] && echo 'true' || echo 'false'", $path))) == "true";
+			return $this->run(sprintf("[ %s %s ] && echo 'true' || echo 'false'", $file ? "-f" : "-d", $path)) == "true";
 		}
 
 		/**
-		 * @param $code
-		 * @param $message
-		 * @param $file
-		 * @param $line
-		 * @param null $context
+		 * @param $path
+		 * @param $type
+		 *
 		 * @throws Exception\Exception
+		 *
+		 * @return bool
+		 */
+		private function checkDirectoryPerms($path, $type)
+		{
+			return $this->pathIs($path, $type);
+		}
+
+		/**
+		 * @param      $code
+		 * @param      $message
+		 * @param      $file
+		 * @param      $line
+		 * @param null $context
+		 *
+		 * @throws Exception\Exception
+		 * @throws ErrorException
+		 * @return void
 		 */
 		public function errorHandler($code, $message, $file, $line, $context = null)
 		{
-			$connectionFailure = "Cannot connect to %s. Error 60. Operation timed out";
+			$host = $this->credentials->getHost();
 
-			if($message == sprintf($connectionFailure, $this->credentials->getHost()))
-				throw new Exception(sprintf(Exception::CONNECTION_FAILURE, $this->credentials->getHost()));
-			else
+			switch($message)
 			{
-				print_r(func_get_args());
+				case sprintf("Cannot connect to %s. Error 60. Operation timed out", $host):
+					throw new Exception(sprintf(Exception::CONNECTION_FAILURE, $host));
+					break;
+				case sprintf("Cannot connect to %s. Error 61. Connection refused", $host):
+					throw new Exception(sprintf(Exception::CONNECTION_REFUSED, $host));
+					break;
+				default:
+					if($code == E_ERROR || $code == E_USER_ERROR)
+						throw new ErrorException($message, $code, null, $file, $line);
+					break;
 			}
 		}
 

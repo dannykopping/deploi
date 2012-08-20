@@ -19,8 +19,12 @@
     $set->setPaths(array("to-deploy/"));
     $set->setExclusions(array("\/\.+", "\.bad"));
 
-	$creds = new Credentials("192.168.2.100", "dev", "dev", 22, Credentials::SERVER);
-	$creds->setWebroot("/var/www");
+	$creds = new Credentials();
+	$creds->setHost(Config::get("filedeploy.host"));
+	$creds->setUsername(Config::get("filedeploy.user"));
+	$creds->setPassword(Config::get("filedeploy.pass"));
+	$creds->setPort(Config::get("filedeploy.port"));
+	$creds->setWebroot(Config::get("filedeploy.webroot"));
 
 //     archive example
 //    $z = new Archive($set);
