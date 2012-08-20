@@ -5,7 +5,7 @@
 	include_once "lib/phpseclib/Net/SFTP.php";
 
 	/**
-	 *    Deploys a FileSet to a server via SSH & SFTP
+	 *    Deploys an Archive payload to a server via SSH & SFTP
 	 */
 	use Deploi\Modules\Base;
 	use Deploi\Util\File\PathHelper;
@@ -24,11 +24,12 @@
 	class Deploy extends Base
 	{
 		/**
-		 * @var \Deploi\Util\File\FileSet
+		 * @var	Archive
 		 */
-		private $fileSet;
+		private $payload;
+
 		/**
-		 * @var \Deploi\Util\Security\Credentials
+		 * @var Credentials
 		 */
 		private $credentials;
 
@@ -38,7 +39,7 @@
 		private $ssh;
 
 		/**
-		 * @var    Net_SFTP
+		 * @var	Net_SFTP
 		 */
 		private $sftp;
 
@@ -48,7 +49,7 @@
 		protected function register()
 		{
 			$this->name = "filedeploy";
-			$this->description = "Deploys a FileSet to a server via SSH & SFTP";
+			$this->description = "Deploys an Archive payload to a server via SSH & SFTP";
 
 			$this->hooks = array(
 				"pre.filedeploy",
@@ -57,14 +58,14 @@
 		}
 
 		/**
-		 * @param \Deploi\Util\File\FileSet         $fileSet
-		 * @param \Deploi\Util\Security\Credentials $credentials
+		 * @param Archive		$payload 		The file archive to be deployed
+		 * @param Credentials 	$credentials	The server credentials to be used
 		 */
-		public function __construct(FileSet $fileSet, Credentials $credentials)
+		public function __construct($payload, Credentials $credentials)
 		{
 			parent::__construct();
 
-			$this->fileSet = $fileSet;
+			$this->payload = $payload;
 			$this->credentials = $credentials;
 
 			set_error_handler(array($this, "errorHandler"), E_ALL);
@@ -132,12 +133,11 @@
 		}
 
 		/**
-		 * Create an archive of all the files to be deployed
+		 * Deploy the Archive payload
 		 */
 		private function deployPayload()
 		{
-			$payload = new Archive($this->fileSet);
-			$tempFile = $payload->save(sys_get_temp_dir() . DIRECTORY_SEPARATOR . "deploi");
+			$tempFile = $this->payload->save(sys_get_temp_dir() . DIRECTORY_SEPARATOR . "deploi");
 
 			$home = trim($this->getHomeDir());
 			$webroot = $this->credentials->getWebroot();
