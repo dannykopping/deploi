@@ -512,7 +512,7 @@
 		public function checkout()
 		{
 			if(!$this->checkout)		$this->checkout = new Checkout();
-			if($this->repository)		$task->setRepository($this->repository);
+			if($this->repository)		$this->checkout->setRepository($this->repository);
 			return $this->checkout;
 		}
 

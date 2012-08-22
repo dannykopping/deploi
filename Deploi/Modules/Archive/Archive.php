@@ -69,6 +69,10 @@
 					$tar->addFile($path["path"], $path["relative"]);
 				}
 			}
+			else
+			{
+				throw new Exception("No files to deploy");
+			}
 
 			try
 			{

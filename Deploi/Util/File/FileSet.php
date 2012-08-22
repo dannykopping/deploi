@@ -16,9 +16,9 @@
 
         public function __construct($basePath = null, $paths = null, $exclusions = null)
         {
-            if(!empty($basePath)) $this->setBasePath($basePath);
-            if(!empty($paths)) $this->setPaths($paths);
-            if(!empty($exclusions)) $this->setExclusions($exclusions);
+            if(!empty($basePath)) 		$this->setBasePath($basePath);
+            if(!empty($paths)) 			$this->setPaths($paths);
+            if(!empty($exclusions)) 	$this->setExclusions($exclusions);
         }
 
         /**
@@ -109,29 +109,33 @@
         {
             $validPaths = array();
 
-            if(empty($this->paths) || count($this->paths) <= 0)
+			$paths = $this->getPaths();
+            if(empty($paths) || count($paths) <= 0)
                 return array();
 
             $paths = array_unique($this->paths);
-            foreach($paths as $path)
-            {
-                $localPath = strpos($path, $this->basePath) === 0
-                    ? substr($path, strlen($this->basePath))
-                    : null;
+			if(!empty($paths) || count($paths) > 0)
+			{
+				foreach($paths as $path)
+				{
+					$localPath = strpos($path, $this->basePath) === 0
+						? substr($path, strlen($this->basePath))
+						: null;
 
-                if(is_dir($path))
-                    continue;
+					if(is_dir($path))
+						continue;
 
-                if(!$this->isExcluded($path, $this->exclusions))
-                {
-                    if(!$excluded)
-                        $validPaths[] = array("path" => $path, "relative" => $localPath);
-                } else
-                {
-                    if($excluded)
-                        $validPaths[] = array("path" => $path, "relative" => $localPath);
-                }
-            }
+					if(!$this->isExcluded($path, $this->exclusions))
+					{
+						if(!$excluded)
+							$validPaths[] = array("path" => $path, "relative" => $localPath);
+					} else
+					{
+						if($excluded)
+							$validPaths[] = array("path" => $path, "relative" => $localPath);
+					}
+				}
+			}
 
             return $validPaths;
         }
@@ -157,6 +161,12 @@
          */
         public function getPaths()
         {
+			$basePath = $this->getBasePath();
+			if(!empty($basePath) && (empty($this->paths) || count($this->paths) == 0))
+			{
+				$this->paths = $this->normalizePaths($basePath, $this->recursiveFileFolderScan($basePath));
+			}
+
             return $this->paths;
         }
 
