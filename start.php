@@ -1,23 +1,25 @@
 <?php
-    use Deploi\Util\Config;
+	use Deploi\Util\Config;
+	use Deploi\Modules\SCMDeploy\GitDeploy;
+	use Deploi\Util\SCM\Git\Git;
 	use Deploi\Util\Security\Credentials;
 	use Deploi\Modules\FileDeploy\Deploy;
 	use Deploi\Modules\FileDeploy\SFTP;
 	use Deploi\Util\File\FileSet;
-    use Deploi\Modules\Archive\Archive;
+	use Deploi\Modules\Archive\Archive;
 
-    include_once "load-lib.php";
+	include_once "load-lib.php";
 
-    /**
-     *
-     */
+	/**
+	 *
+	 */
 
-    Config::setConfigPath("conf/");
+	Config::setConfigPath("conf/");
 
-    $set = new FileSet();
-    $set->setBasePath("to-deploy/");
-    $set->setPaths(array("to-deploy/"));
-    $set->setExclusions(array("\/\.+", "\.bad"));
+	$set = new FileSet();
+	$set->setBasePath("to-deploy/");
+	$set->setPaths(array("to-deploy/"));
+	$set->setExclusions(array("\/\.+", "\.bad", "\.git/*"));
 
 	$creds = new Credentials();
 	$creds->setHost(Config::get("filedeploy.host"));
@@ -26,12 +28,14 @@
 	$creds->setPort(Config::get("filedeploy.port"));
 	$creds->setWebroot(Config::get("filedeploy.webroot"));
 
-//     archive example
-//    $z = new Archive($set);
-//
-//    $tmp = tempnam(sys_get_temp_dir(), "archive");
-//    $z->save($tmp);
-//
-//	echo $tmp;
+	$testRepo = sys_get_temp_dir().DIRECTORY_SEPARATOR."test-repo";
+	$gg = new GitDeploy();
+	$gg->getPayload();
 
-    $deploy = new Deploy($set, $creds);
+	$set->setBasePath($testRepo);
+	$set->setPaths(null);
+
+	$payload = new Archive($set);
+
+
+	$deploy = new Deploy(, $creds);

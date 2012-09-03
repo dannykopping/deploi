@@ -39,7 +39,9 @@
 			{
 				@mkdir($this->targetDirectory, 0777, true);
 				if(!realpath($this->targetDirectory))
-					throw new Exception(sprintf(Exception::PATH_CREATION_FAILURE, Config::get("filedeploy.git.targetDirectory")), "");
+				{
+					throw new Exception(sprintf(Exception::PATH_CREATION_FAILURE, $this->targetDirectory, ""));
+				}
 			}
 		}
 
@@ -71,11 +73,11 @@
 			{
 				$this->git->cloneRepo()->setTargetPath($this->targetDirectory);
 				$this->git->cloneRepo()->execute();
-
-				$this->git->setRepository($this->targetDirectory);
-				$this->git->checkout()->setBranchname(Config::get("filedeploy.git.branch"));
-				$this->git->checkout()->execute();
 			}
+
+			$this->git->setRepository($this->targetDirectory);
+			$this->git->checkout()->setBranchname(Config::get("filedeploy.git.branchOrTag"));
+			$this->git->checkout()->execute();
 		}
 
 		/**
