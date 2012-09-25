@@ -1,0 +1,3 @@
+[submodule "Deploi/Modules/SchemaDeploy/lib/sqldiff"]
+	path = Deploi/Modules/SchemaDeploy/lib/sqldiff
+	url = git@github.com:dannykopping/sqldiff.git

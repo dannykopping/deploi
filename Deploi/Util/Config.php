@@ -88,7 +88,7 @@
                 // if the file is a .conf file
                 if($ext == "conf")
                 {
-                    $conf[$filename] = parse_ini_file($file->getRealpath());
+                    $conf[$filename] = @parse_ini_file($file->getRealpath());
                 }
 
             }
